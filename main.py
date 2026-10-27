@@ -39,16 +39,46 @@ def home():
   return "Username Hunter Bot is running successfully! ⚡"
 
 
-# دالة توليد الأنماط العشوائية
+# دالة توليد الأنماط المتقدمة والمكررة الفخمة
 def usernames():
-  chars = "abcdefghijklmnopqrstuvwxyz"
-  nums = "1234567890"
+  chars = string.ascii_lowercase
+  digits = string.digits
+
   c1 = choice(chars)
   c2 = choice(chars)
   c3 = choice(chars)
-  n1 = choice(nums)
+  n1 = choice(digits)
+  n2 = choice(digits)
+
+  vowels = ["a", "e", "i", "o", "u"]
+  consonants = [c for c in chars if c not in vowels]
+
+  sub_c1 = choice(consonants)
+  v1 = choice(vowels)
 
   random_patterns = [
+      # 1. أنماط الحروف المتكررة كلياً أو جزئياً
+      c1 * 4,  # aaaa
+      c1 * 5,  # aaaaa
+      f"{c1*3}{n1}{n2}",  # aaa12
+      f"{n1}{c1*4}",  # 1aaaa
+      # 2. أنماط التكرار المزدوج والمتناسق
+      f"{c1}{c2}{c1}{c2}",  # abab
+      f"{c1}{c1}{c2}{c2}",  # aabb
+      f"{c1}{c2}{c2}{c1}",  # abba
+      f"{c1}_{c2}{c1}{c2}",  # a_bab
+      # 3. أنماط الشرطة السفلية المميزة والتكرار
+      f"{c1}{c1}_{c1}{c1}",  # aa_aa
+      f"_{c1}{c1}{c1}_",  # _aaa_
+      f"{c1}_{c1}_{c1}",  # a_a_a
+      f"{c1}{c1}_{c1}",  # aa_a
+      f"{c1}_{c1}{c1}",  # a_aa
+      # 4. النماذج شبيهة الكلمات والمنعكسة (صحيح + علة)
+      f"{sub_c1}{v1}{sub_c1}{v1}",  # cava
+      f"{sub_c1}{sub_c1}{v1}{sub_c1}",  # ccac
+      f"{sub_c1}_{v1}{sub_c1}",  # c_vc
+      f"{sub_c1}{v1}_{v1}{sub_c1}",  # cv_vc
+      # 5. الأنماط الكلاسيكية السابقة
       f"{c1}{c2}{c1}{c2}{c1}",
       f"{c1}{c2}{c1}{c2}{c3}",
       f"{c1}_{c1}_{c2}",
@@ -58,7 +88,6 @@ def usernames():
       f"{c1*2}{c2*2}{c3*2}",
       f"{c1*4}{c2}",
       f"{c1*2}{c2}{c1*2}",
-      f"{c1}{c2}{c1}{c2}{c1}",
       f"{c1*3}{n1*2}",
       f"{c1*3}{c2}{n1}",
   ]
