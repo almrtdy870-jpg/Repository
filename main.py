@@ -19,8 +19,8 @@ from telethon.tl.functions.channels import (
     UpdateUsernameRequest,
 )
 
-# 📌 معلوماتك الشخصية والجلسة
-BOT_TOKEN = "8991748811:AAG5Rnrcy4URj72vyeMs2peYu4QCkz42ykM"
+# 📌 معلوماتك الشخصية والجلسة والتوكن الجديد
+BOT_TOKEN = "8816325428:AAG5zvr8tq7-QuDOtaWEw8lM4PQMb_AFoJk"
 ADMIN_ID = "@Hl6l6"
 YrUsername = "@Hl6l6"
 SESSION_STRING = "1BJWap1wBu5ga9zTpmb2mhZ1wl4b0hsZepwc_dZYMJ5wzfRGFWoRkq8cuEH265JJtc8ZqJSBqRVjMODEg6JUE65G_PLrGqGUC-atZAipwzeFZ63KCeSZEAQ9j6SDtIAIonvymzwuoeXNiObDTweFWXt7WqnLjPooru9-NI5-7CnmZ1cP6E_-AUlTmcykkCLCsfJHs6lnPKMltYgApu4mBNoPbO6dXxlK0Ixq3Z3u41GumSzi6TgBvA73BJ1mg0rGyh7LK_caPe1Ylx13f26DZ6j2DIJEXSz5vPaLdByYj-AsU3bteERwq_20CavGykotHnugJCyjY6uGQQoL1uVTZiRoif6VbBXQ="
@@ -211,7 +211,12 @@ def send_welcome(message):
 
 
 def run_telegram_bot():
-  bot.infinity_polling(none_stop=True)
+  try:
+    bot.remove_webhook()  # لمنع تداخل الاتصالات وخطأ 409
+    time.sleep(1)
+    bot.infinity_polling(none_stop=True)
+  except Exception as e:
+    print(f"Polling error: {e}")
 
 
 if __name__ == "__main__":
