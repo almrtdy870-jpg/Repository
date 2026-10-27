@@ -230,12 +230,30 @@ def stop_hunting(message):
   bot.reply_to(message, "🛑 **تم إيقاف صيد اليوزرات المؤقت.**")
 
 
+@bot.message_handler(commands=["clean", "تنظيف_الملفات"])
+def clear_files(message):
+  try:
+    open("banned4.txt", "w").close()
+    open("fragment.txt", "w").close()
+    open("flood.txt", "w").close()
+    bot.reply_to(
+        message,
+        "🧹 **تم تنظيف وتفريغ ملفات الفحص (Banned & Fragment) بنجاح!**\nعادت"
+        " الملفات فارغة وجاهزة.",
+        parse_mode="Markdown",
+    )
+  except Exception as e:
+    bot.reply_to(
+        message, f"❌ حدث خطأ أثناء التنظيف: `{e}`", parse_mode="Markdown"
+    )
+
+
 @bot.message_handler(commands=["start"])
 def send_welcome(message):
   bot.reply_to(
       message,
       "أهلاً بك يا مطورنا العزيز في بوت الصيد والحماية! 🛡️\nاستخدم الأمر"
-      " `/start_hunt` لبدء الصيد.",
+      " `/start_hunt` لبدء الصيد.\nولتنظيف الملفات استخدم `/clean`.",
   )
 
 
