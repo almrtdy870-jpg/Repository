@@ -19,7 +19,7 @@ from telethon.tl.functions.channels import (
     UpdateUsernameRequest,
 )
 
-# 📌 معلوماتك الشخصية والجلسة والتوكن
+# 📌 معلوماتك الشخصية والجلسة والتوكن الجديد
 BOT_TOKEN = "8816325428:AAG5zvr8tq7-QuDOtaWEw8lM4PQMb_AFoJk"
 ADMIN_ID = "@Hl6l6"
 YrUsername = "@Hl6l6"
@@ -33,17 +33,10 @@ app = Flask(__name__)
 
 is_hunting = False
 
-# قائمة الكلمات والكلايش الممنوعة لحماية المجموعات
-BANNED_WORDS = [
-    # يمكنك إضافة الكلمات الإباحية أو الكلايش المخالفة هنا
-    "كلمة_ممنوعة_1",
-    "كلمة_ممنوعة_2",
-]
-
 
 @app.route("/")
 def home():
-  return "Combined Hunter & Protection Bot is running successfully! ⚡"
+  return "Username Hunter Bot is running successfully! ⚡"
 
 
 # دالة توليد الأنماط المتقدمة والمكررة الفخمة
@@ -64,23 +57,28 @@ def usernames():
   v1 = choice(vowels)
 
   random_patterns = [
+      # 1. أنماط الحروف المتكررة كلياً أو جزئياً
       c1 * 4,  # aaaa
       c1 * 5,  # aaaaa
       f"{c1*3}{n1}{n2}",  # aaa12
       f"{n1}{c1*4}",  # 1aaaa
+      # 2. أنماط التكرار المزدوج والمتناسق
       f"{c1}{c2}{c1}{c2}",  # abab
       f"{c1}{c1}{c2}{c2}",  # aabb
       f"{c1}{c2}{c2}{c1}",  # abba
       f"{c1}_{c2}{c1}{c2}",  # a_bab
+      # 3. أنماط الشرطة السفلية المميزة والتكرار
       f"{c1}{c1}_{c1}{c1}",  # aa_aa
       f"_{c1}{c1}{c1}_",  # _aaa_
       f"{c1}_{c1}_{c1}",  # a_a_a
       f"{c1}{c1}_{c1}",  # aa_a
       f"{c1}_{c1}{c1}",  # a_aa
+      # 4. النماذج شبيهة الكلمات والمنعكسة (صحيح + علة)
       f"{sub_c1}{v1}{sub_c1}{v1}",  # cava
       f"{sub_c1}{sub_c1}{v1}{sub_c1}",  # ccac
       f"{sub_c1}_{v1}{sub_c1}",  # c_vc
       f"{sub_c1}{v1}_{v1}{sub_c1}",  # cv_vc
+      # 5. الأنماط الكلاسيكية السابقة
       f"{c1}{c2}{c1}{c2}{c1}",
       f"{c1}{c2}{c1}{c2}{c3}",
       f"{c1}_{c1}_{c2}",
@@ -158,6 +156,7 @@ def run_telethon_hunter():
           try:
             check = await client(CheckUsernameRequest(username=username))
             if check:
+              # محاولة التثبيت (Claim)
               result = await client(
                   CreateChannelRequest(
                       title=f"{username}", about="", megagroup=False
@@ -180,6 +179,7 @@ def run_telethon_hunter():
                 )
                 claim = False
 
+              # إرسال تنبيه لك عبر البوت
               bot.send_message(
                   ADMIN_ID,
                   f"🎉 **New UserName Caught!**\n‹ UserName →"
@@ -187,6 +187,7 @@ def run_telethon_hunter():
                   parse_mode="Markdown",
               )
 
+              # تنظيف القنوات الوهمية
               async for chat in client.iter_dialogs():
                 if chat.name == f"[ {username} ]" and not chat.entity.username:
                   await client(DeleteChannelRequest(channel=chat.entity))
@@ -211,77 +212,7 @@ def run_telethon_hunter():
   loop.run_until_complete(hunter_main())
 
 
-# --- نظام حماية المجموعات (يحذف المخالفات والملصقات والكلايش حتى للمشرفين) ---
-@bot.message_handler(
-    content_types=[
-        "text",
-        "sticker",
-        "photo",
-        "video",
-        "document",
-        "animation",
-    ]
-)
-def group_protection(message):
-  # تجاهل المحادثات الخاصة (الخاص) وتطبيق الحماية على المجموعات فقط
-  if message.chat.type not in ["supergroup", "group"]:
-    return
-
-  try:
-    bot_id = bot.get_me().id
-    if message.from_user.id == bot_id:
-      return
-  except:
-    pass
-
-  chat_id = message.chat.id
-  message_id = message.id
-  user = message.from_user
-
-  should_delete = False
-  violation_reason = ""
-
-  # 1. منع الملصقات (يمكنك تفعيل حذف كل الملصقات أو ملصقات محددة)
-  if message.content_type == "sticker":
-    # إذا أردت منع جميع الملصقات في المجموعة اجعلها True، أو خصصها
-    # should_Delete = True
-    # violation_reason = "ملصق"
-    pass
-
-  # 2. فحص النصوص والكلايش والكلمات الممنوعة
-  text_content = message.text or message.caption
-  if text_content:
-    text_lower = text_content.lower()
-    for word in BANNED_WORDS:
-      if word in text_lower:
-        should_delete = True
-        violation_reason = "محتوى نصي أو كليشة مخالفة"
-        break
-
-  # 3. فحص الصور والفيديوهات التي تحتوي على كابشن مخالف
-  if message.content_type in ["photo", "video"] and message.caption:
-    caption_lower = message.caption.lower()
-    for word in BANNED_WORDS:
-      if word in caption_lower:
-        should_delete = True
-        violation_reason = "صورة/فيديو بكابشن مخالف"
-        break
-
-  # التنفيذ الفوري للحذف (يحذف حتى لو المرسل مشرف)
-  if should_delete:
-    try:
-      bot.delete_message(chat_id, message_id)
-      bot.send_message(
-          chat_id,
-          f"⚠️ **تم حذف رسالة المخالف** (`{user.first_name}`)\n📌 **السبب:**"
-          f" {violation_reason}",
-          parse_mode="Markdown",
-      )
-    except Exception as e:
-      print(f"Protection delete error: {e}")
-
-
-# --- أوامر التحكم بالبوت ---
+# أوامر التحكم بالبوت عبر تليجرام
 @bot.message_handler(commands=["start_hunt", "ابدأ_الصيد"])
 def start_hunting(message):
   global is_hunting
@@ -307,7 +238,8 @@ def clear_files(message):
     open("flood.txt", "w").close()
     bot.reply_to(
         message,
-        "🧹 **تم تنظيف وتفريغ ملفات الفحص بنجاح!**",
+        "🧹 **تم تنظيف وتفريغ ملفات الفحص (Banned & Fragment) بنجاح!**\nعادت"
+        " الملفات فارغة وجاهزة.",
         parse_mode="Markdown",
     )
   except Exception as e:
@@ -320,14 +252,14 @@ def clear_files(message):
 def send_welcome(message):
   bot.reply_to(
       message,
-      "أهلاً بك يا مطورنا العزيز! 🛡️\n- لبدء صيد اليوزرات: `/start_hunt`\n- لتنظيف"
-      " الملفات: `/clean`\n- البوت يقوم أيضاً بحماية المجموعات تلقائياً.",
+      "أهلاً بك يا مطورنا العزيز في بوت الصيد والحماية! 🛡️\nاستخدم الأمر"
+      " `/start_hunt` لبدء الصيد.\nولتنظيف الملفات استخدم `/clean`.",
   )
 
 
 def run_telegram_bot():
   try:
-    bot.remove_webhook()
+    bot.remove_webhook()  # لمنع تداخل الاتصالات وخطأ 409
     time.sleep(1)
     bot.infinity_polling(none_stop=True)
   except Exception as e:
@@ -335,14 +267,14 @@ def run_telegram_bot():
 
 
 if __name__ == "__main__":
-  # تشغيل صيد اليوزرات
+  # تشغيل صيد اليوزرات في الخلفية
   hunter_thread = threading.Thread(target=run_telethon_hunter, daemon=True)
   hunter_thread.start()
 
-  # تشغيل بوت التليجرام (أوامر وحماية)
+  # تشغيل البوت الأساسي
   bot_thread = threading.Thread(target=run_telegram_bot, daemon=True)
   bot_thread.start()
 
-  # تشغيل سيرفر الويب
+  # تشغيل سيرفر الويب على Render
   port = int(os.environ.get("PORT", 10000))
   app.run(host="0.0.0.0", port=port)
