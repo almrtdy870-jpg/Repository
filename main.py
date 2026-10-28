@@ -1,575 +1,295 @@
 import os
-import sqlite3
-import threading
 import time
-import telebot
-from flask import Flask
+import sqlite3
+from pyrogram import Client, filters
+from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from pyrogram.enums import ChatMemberStatus
 
-# سحب التوكن من متغيرات البيئة في رندر
-TOKEN = os.environ.get("BOT_TOKEN")
-bot = telebot.TeleBot(TOKEN, parse_mode="HTML")
-app = Flask(__name__)
+# ==================== إعدادات البوت (تلقائية من المنصة) ====================
+API_ID = int(os.getenv("API_ID", "0"))
+API_HASH = os.getenv("API_HASH", "YOUR_API_HASH")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN")
 
-# إعداد قاعدة البيانات الداخلية SQLite لحفظ إعدادات المجموعات
+app = Client("XPicCleanerBot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+
+# ==================== إعداد قاعدة البيانات الشاملة ====================
 conn = sqlite3.connect("bot_database.db", check_same_thread=False)
 cursor = conn.cursor()
 
-# إنشاء جدول إعدادات حماية حمد وإدارة المجموعات الشاملة
 cursor.execute("""
-    CREATE TABLE IF NOT EXISTS hamad_settings (
-        chat_id INTEGER PRIMARY KEY,
-        lock_channel INTEGER DEFAULT 0,
-        lock_photos INTEGER DEFAULT 0,
-        lock_links INTEGER DEFAULT 1,
-        lock_fashar INTEGER DEFAULT 0,
-        lock_entry INTEGER DEFAULT 0,
-        lock_flood INTEGER DEFAULT 0,
-        lock_symbols INTEGER DEFAULT 0,
-        lock_klayesh INTEGER DEFAULT 0,
-        lock_edit INTEGER DEFAULT 0,
-        lock_video INTEGER DEFAULT 0,
-        lock_persian INTEGER DEFAULT 0,
-        lock_english INTEGER DEFAULT 0,
-        lock_gifs INTEGER DEFAULT 0,
-        lock_stickers INTEGER DEFAULT 0,
-        lock_notices INTEGER DEFAULT 0,
-        lock_story INTEGER DEFAULT 0,
-        lock_noise INTEGER DEFAULT 0,
-        lock_featured_stickers INTEGER DEFAULT 0,
-        lock_bots INTEGER DEFAULT 1,
-        welcome_text TEXT DEFAULT 'أهلاً بك يا {name} في المجموعة، نورتنا! 🌹',
-        custom_link TEXT DEFAULT NULL
-    )
+CREATE TABLE IF NOT EXISTS group_settings (
+    chat_id INTEGER PRIMARY KEY,
+    del_photo INTEGER DEFAULT 1,
+    del_video INTEGER DEFAULT 1,
+    del_round_video INTEGER DEFAULT 1,
+    del_animation INTEGER DEFAULT 1,
+    del_sticker INTEGER DEFAULT 1,
+    del_emoji INTEGER DEFAULT 1,
+    del_forward INTEGER DEFAULT 1,
+    del_story INTEGER DEFAULT 1,
+    del_link INTEGER DEFAULT 1,
+    detector_status INTEGER DEFAULT 1,
+    detector_punishment TEXT DEFAULT 'restrict',
+    delete_message INTEGER DEFAULT 1,
+    alert_private INTEGER DEFAULT 1,
+    alert_group INTEGER DEFAULT 1,
+    mention_admins INTEGER DEFAULT 1,
+    antinuke_enabled INTEGER DEFAULT 1,
+    antinuke_limit INTEGER DEFAULT 2,
+    antinuke_time INTEGER DEFAULT 900,
+    clean_count INTEGER DEFAULT 50
+)
+""")
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS admin_actions (
+    chat_id INTEGER,
+    admin_id INTEGER,
+    action_time REAL
+)
 """)
 conn.commit()
 
-
-@app.route("/")
-def home():
-  return "Hamad & Merida Complete Bot is active and running 24/7!"
-
-
-# دالة جلب إعدادات المجموعة أو إنشائها تلقائياً
-def get_hamad_settings(chat_id):
-  cursor.execute("SELECT * FROM hamad_settings WHERE chat_id = ?", (chat_id,))
-  row = cursor.fetchone()
-  if not row:
-    cursor.execute(
-        "INSERT INTO hamad_settings (chat_id, lock_channel, lock_photos,"
-        " lock_links, lock_fashar, lock_entry, lock_flood, lock_symbols,"
-        " lock_klayesh, lock_edit, lock_video, lock_persian, lock_english,"
-        " lock_gifs, lock_stickers, lock_notices, lock_story, lock_noise,"
-        " lock_featured_stickers, lock_bots, welcome_text, custom_link) VALUES"
-        " (?, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 'أهلاً بك"
-        " يا {name} في المجموعة، نورتنا! 🌹', NULL)",
-        (chat_id,),
-    )
-    conn.commit()
-    cursor.execute(
-        "SELECT * FROM hamad_settings WHERE chat_id = ?", (chat_id,)
-    )
+def get_settings(chat_id):
+    cursor.execute("SELECT * FROM group_settings WHERE chat_id = ?", (chat_id,))
     row = cursor.fetchone()
-  return row
+    if not row:
+        cursor.execute("INSERT INTO group_settings (chat_id) VALUES (?)", (chat_id,))
+        conn.commit()
+        cursor.execute("SELECT * FROM group_settings WHERE chat_id = ?", (chat_id,))
+        row = cursor.fetchone()
+    return row
 
-
-# دالة التحقق من المشرفين
-def is_admin(chat_id, user_id):
-  try:
-    member = bot.get_chat_member(chat_id, user_id)
-    return member.status in ["creator", "administrator"]
-  except:
-    return False
-
-
-# ترحيب بالأعضاء الجدد
-@bot.message_handler(content_types=["new_chat_members"])
-def welcome_new_member(message):
-  chat_id = message.chat.id
-  row = get_hamad_settings(chat_id)
-  lock_entry = row[5]
-  lock_notices = row[15]
-  welcome_template = row[21]
-
-  if lock_entry or lock_notices:
-    try:
-      bot.delete_message(chat_id, message.message_id)
-      if lock_entry:
-        for m in message.new_chat_members:
-          bot.ban_chat_member(chat_id, m.id)
-          bot.unban_chat_member(chat_id, m.id)
-    except:
-      pass
-    return
-
-  for member in message.new_chat_members:
-    name = member.first_name
-    msg_text = welcome_template.replace("{name}", name)
-    bot.reply_to(message, msg_text)
-
-
-# أمر البدء
-@bot.message_handler(commands=["start"])
-def start_command(message):
-  if message.chat.type == "private":
-    bot.reply_to(
-        message,
-        "أهلاً بك في بوت حماية حمد وميريدا المتكامل 🛡️\nأضفني إلى مجموعتك وارفعني"
-        " مشرفاً لأقوم بحمايتها بأعلى كفاءة!",
-    )
-  else:
-    bot.reply_to(message, "بوت حماية حمد يعمل بكامل طاقته لحماية الجروب! ⚡")
-
-
-# قاموس أوامر القفل والفتح الشاملة
-locks_dict = {
-    "قفل القناة": ("lock_channel", 1, "تم قفل القناة بنجاح 🔒"),
-    "فتح القناة": ("lock_channel", 0, "تم فتح القناة بنجاح 🔓"),
-    "قفل الصور": ("lock_photos", 1, "تم قفل الصور بنجاح 🔒"),
-    "فتح الصور": ("lock_photos", 0, "تم فتح الصور بنجاح 🔓"),
-    "قفل الرابط": ("lock_links", 1, "تم قفل الرابط بنجاح 🔒"),
-    "فتح الرابط": ("lock_links", 0, "تم فتح الرابط بنجاح 🔓"),
-    "قفل الفشار": ("lock_fashar", 1, "تم قفل الفشار بنجاح 🔒"),
-    "فتح الفشار": ("lock_fashar", 0, "تم فتح الفشار بنجاح 🔓"),
-    "قفل الدخول": ("lock_entry", 1, "تم قفل الدخول بنجاح 🔒"),
-    "فتح الدخول": ("lock_entry", 0, "تم فتح الدخول بنجاح 🔓"),
-    "قفل التكرار": ("lock_flood", 1, "تم قفل التكرار بنجاح 🔒"),
-    "فتح التكرار": ("lock_flood", 0, "تم فتح التكرار بنجاح 🔓"),
-    "قفل الشارحة": ("lock_symbols", 1, "تم قفل الشارحة بنجاح 🔒"),
-    "فتح الشارحة": ("lock_symbols", 0, "تم فتح الشارحة بنجاح 🔓"),
-    "قفل الكلايش": ("lock_klayesh", 1, "تم قفل الكلايش بنجاح 🔒"),
-    "فتح الكلايش": ("lock_klayesh", 0, "تم فتح الكلايش بنجاح 🔓"),
-    "قفل التعديل": ("lock_edit", 1, "تم قفل التعديل بنجاح 🔒"),
-    "فتح التعديل": ("lock_edit", 0, "تم فتح التعديل بنجاح 🔓"),
-    "قفل الفيديو": ("lock_video", 1, "تم قفل الفيديو بنجاح 🔒"),
-    "فتح الفيديو": ("lock_video", 0, "تم فتح الفيديو بنجاح 🔓"),
-    "قفل الفارسية": ("lock_persian", 1, "تم قفل اللغة الفارسية بنجاح 🔒"),
-    "فتح الفارسية": ("lock_persian", 0, "تم فتح اللغة الفارسية بنجاح 🔓"),
-    "قفل الانجليزية": ("lock_english", 1, "تم قفل اللغة الانجليزية بنجاح 🔒"),
-    "فتح الانجليزية": ("lock_english", 0, "تم فتح اللغة الانجليزية بنجاح 🔓"),
-    "قفل المتحركات": ("lock_gifs", 1, "تم قفل المتحركات بنجاح 🔒"),
-    "فتح المتحركات": ("lock_gifs", 0, "تم فتح المتحركات بنجاح 🔓"),
-    "قفل الملصقات": ("lock_stickers", 1, "تم قفل الملصقات بنجاح 🔒"),
-    "فتح الملصقات": ("lock_stickers", 0, "تم فتح الملصقات بنجاح 🔓"),
-    "قفل الاشعارات": ("lock_notices", 1, "تم قفل الإشعارات بنجاح 🔒"),
-    "فتح الاشعارات": ("lock_notices", 0, "تم فتح الإشعارات بنجاح 🔓"),
-    "قفل الستوري": ("lock_story", 1, "تم قفل الستوري بنجاح 🔒"),
-    "فتح الستوري": ("lock_story", 0, "تم فتح الستوري بنجاح 🔓"),
-    "قفل التشويش": ("lock_noise", 1, "تم قفل التشويش بنجاح 🔒"),
-    "فتح التشويش": ("lock_noise", 0, "تم فتح التشويش بنجاح 🔓"),
-    "قفل الملصق المميز": (
-        "lock_featured_stickers",
-        1,
-        "تم قفل الملصق المميز بنجاح 🔒",
-    ),
-    "فتح الملصق المميز": (
-        "lock_featured_stickers",
-        0,
-        "تم فتح الملصق المميز بنجاح 🔓",
-    ),
-    "قفل البوتات": ("lock_bots", 1, "تم قفل دخول البوتات بنجاح 🔒"),
-    "فتح البوتات": ("lock_bots", 0, "تم فتح دخول البوتات بنجاح 🔓"),
-}
-
-# قائمة أوامر التفعيل والتعطيل المطلوبة
-activation_features = [
-    "اطردني",
-    "اضف تاك",
-    "اضف رسائل",
-    "الايدي",
-    "الايدي العام",
-    "الايدي بالصوره",
-    "الترحيب",
-    "الترحيب الثانوي",
-    "التحقق",
-    "التحشيش",
-    "التنظيف",
-    "الردود",
-    "الرفع",
-    "الرابط",
-    "الهمسة",
-    "الوضع الليلي",
-    "اليوتيوب",
-    "الكتم",
-    "المضاد",
-    "المسح التلقائي",
-    "المسح التلقائي بالوقت",
-    "الحظر",
-    "الحظر المحدد",
-    "الطرد",
-    "تاك عام",
-    "تاك للكل",
-    "منو ضافني",
-    "مسح الرتب",
-    "ردود البوت",
-]
-
-
-# معالج الأوامر والنص العادي الشامل
-@bot.message_handler(func=lambda m: m.text and m.chat.type != "private")
-def handle_all_messages(message):
-  text = message.text.strip()
-  lower_text = text.lower()
-  chat_id = message.chat.id
-  user_id = message.from_user.id
-
-  # 1. أمر الأيدي (ا أو ايدي)
-  if lower_text in ["ا", "ايدي", "الايدي", "id", "/id"]:
-    user = message.from_user
-    chat = message.chat
-    res = (
-        f"<b>معلوماتك الشخصية:</b>\n"
-        f"- الاسم: {user.first_name}\n"
-        f"- الآيدي: <code>{user.id}</code>\n"
-        f"- المعرف: @{user.username if user.username else 'لا يوجد'}\n\n"
-        f"<b>معلومات المجموعة:</b>\n"
-        f"- اسم المجموعة: {chat.title}\n"
-        f"- آيدي الجروب: <code>{chat.id}</code>"
-    )
-    bot.reply_to(message, res)
-    return
-
-  # 2. فحص البوت
-  if lower_text == "فحص البوت":
-    bot.reply_to(
-        message,
-        "البوت يعمل بكامل طاقته وبحالة ممتازة 24/7 على السيرفر! 🚀⚡",
-    )
-    return
-
-  # 3. المجموعة (معلومات الجروب)
-  if lower_text in ["المجموعه", "المجموعة"]:
-    chat = message.chat
-    try:
-      members_count = bot.get_chat_member_count(chat_id)
-      bot.reply_to(
-          message,
-          f"<b>معلومات المجموعة:</b>\n- الاسم: {chat.title}\n- الآيدي:"
-          f" <code>{chat.id}</code>\n- عدد الأعضاء: {members_count}",
-      )
-    except:
-      bot.reply_to(message, f"اسم المجموعة: {chat.title}\nآيدي: {chat.id}")
-    return
-
-  # معالجة أوامر التفعيل والتعطيل الجديدة
-  if lower_text.startswith("تفعيل ") or lower_text.startswith("تعطيل "):
-    if not is_admin(chat_id, user_id):
-      bot.reply_to(message, "عذراً، هذا الأمر للمشرفين فقط! ❌")
-      return
-
-    action = "تفعيل" if lower_text.startswith("تفعيل ") else "تعطيل"
-    feature = (
-        text.replace("تفعيل", "")
-        .replace("تعطيل", "")
-        .replace("تفعيل", "")
-        .replace("تعطيل", "")
-        .strip()
-    )
-
-    bot.reply_to(
-        message,
-        f"تم {'تفعيل' if action == 'تفعيل' else 'تعطيل'} ميزة (<b>{feature}</b>)"
-        " بنجاح في المجموعة! ✅",
-    )
-    return
-
-  # معالجة أوامر القفل والفتح
-  if lower_text in locks_dict:
-    if not is_admin(chat_id, user_id):
-      bot.reply_to(message, "عذراً، هذا الأمر للمشرفين فقط! ❌")
-      return
-    col, val, reply_msg = locks_dict[lower_text]
-    cursor.execute(
-        f"UPDATE hamad_settings SET {col} = ? WHERE chat_id = ?", (val, chat_id)
-    )
+def update_setting(chat_id, column, value):
+    cursor.execute(f"UPDATE group_settings SET {column} = ? WHERE chat_id = ?", (value, chat_id))
     conn.commit()
-    bot.reply_to(message, reply_msg)
-    return
 
-  # أوامر إدارة المشرفين المتقدمة
-  if is_admin(chat_id, user_id):
+# ==================== قائمة الأوامر الرئيسية والأزرار ====================
+@app.on_message(filters.command(["الاوامر", "أوامر"], prefixes=["/", "،", "."]) & filters.group)
+async def panel_command(client: Client, message: Message):
+    try:
+        user = await client.get_chat_member(message.chat.id, message.from_user.id)
+        if user.status not in [ChatMemberStatus.OWNER, ChatMemberStatus.ADMINISTRATOR]:
+            return await message.reply("عذراً، هذا الأمر للمشرفين فقط 🛑")
+    except:
+        return
 
-    if lower_text == "اعدادات الميوزك":
-      bot.reply_to(
-          message,
-          "<b>🎵 لوحة إعدادات الميوزك والتشغيل الصوتي:</b>\n- حالة السيرفر: مفعل"
-          " ✅",
-      )
-      return
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("👮‍♂️ المساعدين", callback_data="sec_assistants"), InlineKeyboardButton("🆓 الاحرار", callback_data="sec_free")],
+        [InlineKeyboardButton("🧹 المنظفين", callback_data="sec_cleaners"), InlineKeyboardButton("⚙️ إعدادات الكاشف", callback_data="sec_detector")],
+        [InlineKeyboardButton("🛑 مانع التفليش", callback_data="sec_antinuke"), InlineKeyboardButton("🗑 قسم التنظيف", callback_data="sec_cleaner_menu")]
+    ])
+    
+    await message.reply(
+        "• **XPic Cleaner 🔥**\n\n"
+        "**مرحباً بك في قائمة الأوامر الرئيسية ⚡️**\n"
+        "اختر القسم الذي تريد التحكم به من الأسفل 👇",
+        reply_markup=keyboard
+    )
 
-    if lower_text == "اعدادات المضاد":
-      row = get_hamad_settings(chat_id)
-      bot.reply_to(
-          message,
-          f"<b>🛡️ إعدادات الحماية المضادة الحالية:</b>\n- قفل الروابط:"
-          f" {'مفعل 🔒' if row[3] else 'معطل 🔓'}\n- قفل الصور:"
-          f" {'مفعل 🔒' if row[2] else 'معطل 🔓'}",
-      )
-      return
+# ==================== معالجة الأزرار التفاعلية ====================
+@app.on_callback_query()
+async def callback_handler(client: Client, callback_query: CallbackQuery):
+    data = callback_query.data
+    chat_id = callback_query.message.chat.id
+    settings = get_settings(chat_id)
 
-    if lower_text in ["اعدادات التسلية", "إعدادات الالعاب", "اعدادات الالعاب"]:
-      bot.reply_to(
-          message, "🎮 <b>قسم ألعاب وتسلية المجموعة:</b>\nالألعاب تفاعلية وجاهزة!"
-      )
-      return
+    if data == "main_menu":
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("👮‍♂️ المساعدين", callback_data="sec_assistants"), InlineKeyboardButton("🆓 الاحرار", callback_data="sec_free")],
+            [InlineKeyboardButton("🧹 المنظفين", callback_data="sec_cleaners"), InlineKeyboardButton("⚙️ إعدادات الكاشف", callback_data="sec_detector")],
+            [InlineKeyboardButton("🛑 مانع التفليش", callback_data="sec_antinuke"), InlineKeyboardButton("🗑 قسم التنظيف", callback_data="sec_cleaner_menu")]
+        ])
+        await callback_query.message.edit_text("• **XPic Cleaner 🔥**\n\nمرحباً بك في قائمة الأوامر الرئيسية ⚡️", reply_markup=keyboard)
 
-    if lower_text in ["انشاء رابط", "ر", "الرابط"]:
-      try:
-        link = bot.export_chat_invite_link(chat_id)
-        bot.reply_to(message, f"<b>رابط دعوة المجموعة:</b>\n{link}")
-      except Exception as e:
-        bot.reply_to(message, f"فشل إنشاء الرابط: {e}")
-      return
+    elif data == "sec_cleaner_menu":
+        p = "✅" if settings[1] else "❌"
+        v = "✅" if settings[2] else "❌"
+        rv = "✅" if settings[3] else "❌"
+        anim = "✅" if settings[4] else "❌"
+        stk = "✅" if settings[5] else "❌"
+        emj = "✅" if settings[6] else "❌"
+        fwd = "✅" if settings[7] else "❌"
+        stry = "✅" if settings[8] else "❌"
+        lnk = "✅" if settings[9] else "❌"
 
-    if lower_text.startswith("تعين الرابط ") or lower_text.startswith(
-        "اضف رابط "
-    ):
-      new_link = text.split(maxsplit=2)[2]
-      cursor.execute(
-          "UPDATE hamad_settings SET custom_link = ? WHERE chat_id = ?",
-          (new_link, chat_id),
-      )
-      conn.commit()
-      bot.reply_to(message, f"تم حفظ وتعيين رابط المجموعة بنجاح ✅\n{new_link}")
-      return
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton(f"فيديو دائري: {rv}", callback_data="toggle_rv"), InlineKeyboardButton(f"فيديو: {v}", callback_data="toggle_v"), InlineKeyboardButton(f"صور: {p}", callback_data="toggle_p")],
+            [InlineKeyboardButton(f"إيموجي مميز: {emj}", callback_data="toggle_emj"), InlineKeyboardButton(f"GIF: {anim}", callback_data="toggle_anim"), InlineKeyboardButton(f"ملصقات: {stk}", callback_data="toggle_stk")],
+            [InlineKeyboardButton(f"الروابط: {lnk}", callback_data="toggle_lnk"), InlineKeyboardButton(f"الستوري: {stry}", callback_data="toggle_stry"), InlineKeyboardButton(f"التوجيه: {fwd}", callback_data="toggle_fwd")],
+            [InlineKeyboardButton("⬅️ رجوع", callback_data="main_menu")]
+        ])
+        await callback_query.message.edit_text("⚙️ **مرحباً بك في قسم التنظيم والتنظيف التلقائي:**", reply_markup=keyboard)
 
-    if lower_text in ["تغيير الايدي", "تعين الايدي", "تعيين الايدي العام"]:
-      bot.reply_to(message, "🆔 تم تحديث وتعيين معرف ومُعرف المجموعة بنجاح!")
-      return
+    elif data.startswith("toggle_"):
+        col_map = {
+            "toggle_p": "del_photo", "toggle_v": "del_video", "toggle_rv": "del_round_video",
+            "toggle_anim": "del_animation", "toggle_stk": "del_sticker", "toggle_emj": "del_emoji",
+            "toggle_fwd": "del_forward", "toggle_stry": "del_story", "toggle_lnk": "del_link"
+        }
+        col = col_map.get(data)
+        if col:
+            index_map = {"del_photo": 1, "del_video": 2, "del_round_video": 3, "del_animation": 4, "del_sticker": 5, "del_emoji": 6, "del_forward": 7, "del_story": 8, "del_link": 9}
+            curr_val = settings[index_map[col]]
+            new_val = 0 if curr_val == 1 else 1
+            update_setting(chat_id, col, new_val)
+            await callback_query.answer("تم التحديث بنجاح ✅")
+            return await callback_handler(client, CallbackQuery(id=callback_query.id, from_user=callback_query.from_user, chat_instance=callback_query.chat_instance, message=callback_query.message, data="sec_cleaner_menu"))
 
-    if lower_text in ["مسح الايدي", "مسح الايدي العام"]:
-      bot.reply_to(message, "🗑️ تم مسح الأيدي المخصص وإعادة تعيينه.")
-      return
+    elif data == "sec_detector":
+        det_st = "مفعل ✅" if settings[10] else "معطل ❌"
+        pun = settings[11]
+        pun_text = "تقييد ⚠️" if pun == "restrict" else ("حظر 🚫" if pun == "ban" else "بلا عقوبة 🟢")
+        del_m = "نعم ✅" if settings[12] else "لا ❌"
 
-    if lower_text.startswith("وضع ترحيب "):
-      custom_wel = text.replace("وضع ترحيب", "").strip()
-      cursor.execute(
-          "UPDATE hamad_settings SET welcome_text = ? WHERE chat_id = ?",
-          (custom_wel, chat_id),
-      )
-      conn.commit()
-      bot.reply_to(message, "تم حفظ رسالة الترحيب الجديدة بنجاح! 🎉")
-      return
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton(f"حالة الكاشف ⟵ {det_st}", callback_data="det_toggle")],
+            [InlineKeyboardButton(f"العقوبة ⟵ {pun_text}", callback_data="det_punishment_menu")],
+            [InlineKeyboardButton(f"حذف الرسالة ⟵ {del_m}", callback_data="det_del_toggle")],
+            [InlineKeyboardButton("⬅️ رجوع", callback_data="main_menu")]
+        ])
+        await callback_query.message.edit_text("⚙️ **إعدادات الكاشف والتحكم الذكي:**", reply_markup=keyboard)
 
-    if lower_text == "الترحيب":
-      row = get_hamad_settings(chat_id)
-      bot.reply_to(
-          message, f"<b>رسالة الترحيب الحالية في المجموعة:</b>\n\n{row[21]}"
-      )
-      return
+    elif data == "det_toggle":
+        new_v = 0 if settings[10] == 1 else 1
+        update_setting(chat_id, "detector_status", new_v)
+        await callback_query.answer("تم تغيير حالة الكاشف ✅")
+        return await callback_handler(client, CallbackQuery(id=callback_query.id, from_user=callback_query.from_user, chat_instance=callback_query.chat_instance, message=callback_query.message, data="sec_detector"))
 
-    if lower_text == "مسح الترحيب":
-      cursor.execute(
-          "UPDATE hamad_settings SET welcome_text = 'أهلاً بك يا {name} في"
-          " المجموعة، نورتنا! 🌹' WHERE chat_id = ?",
-          (chat_id,),
-      )
-      conn.commit()
-      bot.reply_to(message, "تمت إعادة تعيين رسالة الترحيب للوضع الافتراضي 🔄")
-      return
+    elif data == "det_del_toggle":
+        new_v = 0 if settings[12] == 1 else 1
+        update_setting(chat_id, "delete_message", new_v)
+        await callback_query.answer("تم التحديث ✅")
+        return await callback_handler(client, CallbackQuery(id=callback_query.id, from_user=callback_query.from_user, chat_instance=callback_query.chat_instance, message=callback_query.message, data="sec_detector"))
 
-    if lower_text in ["رفع المالك", "حذف المالك البديل", "حذف توحيد", "اضف توحيد"]:
-      bot.reply_to(
-          message, "👑 تم تنفيذ أمر الإدارة والصلاحيات الملكية بنجاح!"
-      )
-      return
+    elif data == "det_punishment_menu":
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("تقييد ⚠️", callback_data="set_pun_restrict"), InlineKeyboardButton("حظر 🚫", callback_data="set_pun_ban"), InlineKeyboardButton("بلا عقوبة 🟢", callback_data="set_pun_none")],
+            [InlineKeyboardButton("⬅️ رجوع", callback_data="sec_detector")]
+        ])
+        await callback_query.message.edit_text("⚠️ **اختر نوع العقوبة عند المخالفة:**", reply_markup=keyboard)
 
-    if lower_text == "مسح الرتب":
-      bot.reply_to(message, "🔄 تم مسح وتصفير كافة الرتب الإضافية.")
-      return
+    elif data.startswith("set_pun_"):
+        p_type = data.replace("set_pun_", "")
+        update_setting(chat_id, "detector_punishment", p_type)
+        await callback_query.answer("تم تحديث العقوبة بنجاح ✅")
+        return await callback_handler(client, CallbackQuery(id=callback_query.id, from_user=callback_query.from_user, chat_instance=callback_query.chat_instance, message=callback_query.message, data="sec_detector"))
 
-    if lower_text in ["اوامر التنظيف", "تنظيف الميديا"]:
-      bot.reply_to(message, "🧹 جاري تنظيف وحذف ملفات الميديا والرسائل بنجاح!")
-      return
-
-    if lower_text == "تنظيف التعديل":
-      bot.reply_to(message, "🧹 تم تنظيف الرسائل المعدلة بنجاح.")
-      return
-
-    if lower_text.startswith("وضع وقت المسح "):
-      bot.reply_to(message, "⏱️ تم ضبط وقت الحذف التلقائي بنجاح.")
-      return
-
-    if lower_text.startswith("وضع عدد المسح "):
-      bot.reply_to(message, "📊 تم ضبط عدد الرسائل المحددة للمسح بنجاح.")
-      return
-
-    if lower_text in ["ت", "تثبيت"]:
-      if message.reply_to_message:
-        try:
-          bot.pin_chat_message(chat_id, message.reply_to_message.message_id)
-          bot.reply_to(message, "تم تثبيت الرسالة بنجاح 📌")
-        except Exception as e:
-          bot.reply_to(message, f"فشل التثبيت: {e}")
-      else:
-        bot.reply_to(message, "يرجى الرد على الرسالة المراد تثبيتها.")
-      return
-
-    if lower_text == "الغاء تثبيت":
-      try:
-        bot.unpin_chat_message(chat_id)
-        bot.reply_to(message, "تم إلغاء تثبيت الرسالة بنجاح 🔓")
-      except:
-        pass
-      return
-
-    if lower_text == "الغاء تثبيت الكل":
-      try:
-        bot.unpin_all_chat_messages(chat_id)
-        bot.reply_to(message, "تم إلغاء تثبيت كافة الرسائل بنجاح 🔓")
-      except:
-        pass
-      return
-
-    if lower_text == "اشراف":
-      try:
-        admins = bot.get_chat_administrators(chat_id)
-        admin_list = "\n".join(
-            [f"- {a.user.first_name} (@{a.user.username})" for a in admins]
+    elif data == "sec_antinuke":
+        an_status = "✅ مفعل" if settings[16] else "❌ معطل"
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton(f"مانع التفليش: {an_status}", callback_data="toggle_antinuke")],
+            [InlineKeyboardButton("⬅️ رجوع", callback_data="main_menu")]
+        ])
+        await callback_query.message.edit_text(
+            f"🛡 **قسم مانع التفليش (Anti-Nuke)**\n\n"
+            f"• الوضع الحالي: مسموح حظر {settings[17]} نفر خلال {int(settings[18]/60)} دقيقة.\n"
+            f"• الإجراء التلقائي: تنزيل المشرف وسحب صلاحياته فوراً.",
+            reply_markup=keyboard
         )
-        bot.reply_to(message, f"<b>قائمة المشرفين في المجموعة:</b>\n{admin_list}")
-      except Exception as e:
-        bot.reply_to(message, f"تعذر جلب المشرفين: {e}")
-      return
 
-    if lower_text == "قائمة المنع":
-      bot.reply_to(message, "قائمة المنع الحالية مفعلة حسب الإعدادات 🛡️")
-      return
+    elif data == "toggle_antinuke":
+        new_v = 0 if settings[16] == 1 else 1
+        update_setting(chat_id, "antinuke_enabled", new_v)
+        await callback_query.answer("تم تحديث مانع التفليش ✅")
+        return await callback_handler(client, CallbackQuery(id=callback_query.id, from_user=callback_query.from_user, chat_instance=callback_query.chat_instance, message=callback_query.message, data="sec_antinuke"))
 
-    if lower_text in ["مسح قائمه المنع", "مسح قائمة المنع"]:
-      bot.reply_to(message, "تم إعادة تعيين قيود قائمة المنع 🔄")
-      return
+    elif data in ["sec_assistants", "sec_free", "sec_cleaners"]:
+        titles = {"sec_assistants": "المساعدين 👮‍♂️", "sec_free": "الأحرار 🆓", "sec_cleaners": "المنظفين 🧹"}
+        keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ رجوع", callback_data="main_menu")]])
+        await callback_query.message.edit_text(f"📌 **أوامر قسم ({titles.get(data)})**\n\nيمكنك التحكم بهذا القسم وإضافة الأعضاء بسهولة عبر الأوامر الخاصة.", reply_markup=keyboard)
 
-    if lower_text.startswith("اعلان البوت "):
-      announcement = text.replace("اعلان البوت", "").strip()
-      bot.reply_to(
-          message,
-          f"📢 <b>إعلان رسمي من إدارة البوت:</b>\n\n{announcement}",
-      )
-      return
+    await callback_query.answer()
 
-    if lower_text.startswith("تنظيف "):
-      try:
-        count = int(text.split()[1])
-        msg_id = message.message_id
-        for i in range(count):
-          try:
-            bot.delete_message(chat_id, msg_id - i)
-          except:
-            pass
-        bot.reply_to(message, f"تم تنظيف وحذف آخر {count} رسالة بنجاح 🧹")
-      except:
-        bot.reply_to(message, "مثال صحيح: <code>تنظيف 10</code>")
-      return
+# ==================== نظام تنظيف الميديا التلقائي ====================
+@app.on_message(filters.group & (filters.photo | filters.video | filters.animation | filters.sticker | filters.entity("url")))
+async def media_cleaner_handler(client: Client, message: Message):
+    if not message.from_user:
+        return
+    
+    try:
+        member = await client.get_chat_member(message.chat.id, message.from_user.id)
+        if member.status in [ChatMemberStatus.OWNER, ChatMemberStatus.ADMINISTRATOR]:
+            return
+    except:
+        pass
 
-    if lower_text == "مسح البوتات":
-      bot.reply_to(message, "🔍 جاري فحص وطرد الحسابات الوهمية والبوتات...")
-      return
+    chat_id = message.chat.id
+    st = get_settings(chat_id)
 
-  # استثناء المشرفين من الحماية التلقائية
-  if is_admin(chat_id, user_id):
-    return
+    should_delete = False
+    if message.photo and st[1] == 1:
+        should_delete = True
+    elif message.video and st[2] == 1:
+        should_delete = True
+    elif message.animation and st[4] == 1:
+        should_delete = True
+    elif message.sticker and st[5] == 1:
+        should_delete = True
+    elif message.link and st[9] == 1:
+        should_delete = True
+    elif message.forward_date and st[7] == 1:
+        should_delete = True
 
-  # فلاتر الحماية التلقائية
-  row = get_hamad_settings(chat_id)
-  (
-      _,
-      lock_channel,
-      lock_photos,
-      lock_links,
-      lock_fashar,
-      lock_entry,
-      lock_flood,
-      lock_symbols,
-      lock_klayesh,
-      lock_edit,
-      lock_video,
-      lock_persian,
-      lock_english,
-      lock_gifs,
-      lock_stickers,
-      lock_notices,
-      lock_story,
-      lock_noise,
-      lock_featured_stickers,
-      lock_bots,
-      _,
-      _,
-  ) = row
-
-  if (
-      message.new_chat_members
-      and lock_bots
-      and any(m.is_bot for m in message.new_chat_members)
-  ):
-    for m in message.new_chat_members:
-      if m.id != bot.get_me().id:
+    if should_delete:
         try:
-          bot.ban_chat_member(chat_id, m.id)
+            await message.delete()
+        except Exception as e:
+            print(f"فشل حذف الميديا: {e}")
+
+# ==================== نظام مانع التفليش (Anti-Nuke) ====================
+@app.on_chat_member_updated()
+async def antinuke_system(client: Client, member_update):
+    chat_id = member_update.chat.id
+    st = get_settings(chat_id)
+    
+    if st[16] == 0:
+        return
+
+    if member_update.new_chat_member and member_update.new_chat_member.status == ChatMemberStatus.BANNED:
+        current_time = time.time()
+        admin_id = member_update.from_user.id if member_update.from_user else None
+        
+        if not admin_id:
+            return
+
+        try:
+            chat = await client.get_chat(chat_id)
+            if chat.owner and chat.owner.user.id == admin_id:
+                return
         except:
-          pass
-    return
+            pass
 
-  if message.content_type == "text" and message.text:
-    t_lower = message.text.lower()
-    is_lnk = "http://" in t_lower or "https://" in t_lower or "t.me/" in t_lower
-    if lock_links and is_lnk:
-      try:
-        bot.delete_message(chat_id, message.message_id)
-        return
-      except:
-        pass
+        cursor.execute("DELETE FROM admin_actions WHERE chat_id = ? AND action_time < ?", (chat_id, current_time - st[18]))
+        cursor.execute("INSERT INTO admin_actions VALUES (?, ?, ?)", (chat_id, admin_id, current_time))
+        conn.commit()
 
-    if lock_klayesh and len(message.text) > 350:
-      try:
-        bot.delete_message(chat_id, message.message_id)
-        return
-      except:
-        pass
+        cursor.execute("SELECT COUNT(*) FROM admin_actions WHERE chat_id = ? AND admin_id = ?", (chat_id, admin_id))
+        count = cursor.fetchone()[0]
 
-  if message.content_type == "photo" and lock_photos:
-    try:
-      bot.delete_message(chat_id, message.message_id)
-      return
-    except:
-      pass
+        if count > st[17]:
+            try:
+                await client.promote_chat_member(
+                    chat_id=chat_id,
+                    user_id=admin_id,
+                    is_anonymous=False,
+                    can_manage_chat=False,
+                    can_delete_messages=False,
+                    can_manage_video_chats=False,
+                    can_restrict_members=False,
+                    can_promote_members=False,
+                    can_change_info=False,
+                    can_invite_users=False,
+                    can_pin_messages=False
+                )
+                await client.send_message(
+                    chat_id,
+                    f"⚠️ **تحذير مانع التفليش (Anti-Nuke)**\n\n"
+                    f"• قام أحد المشرفين بتجاوز الحد المسموح للإجراءات المتكررة!\n"
+                    f"• الإجراء المتخذ: **تم تنزيل المشرف تلقائياً** لحماية المجموعة 🛡"
+                )
+            except Exception as e:
+                print(f"فشل تنزيل المشرف: {e}")
 
-  if message.content_type == "video" and lock_video:
-    try:
-      bot.delete_message(chat_id, message.message_id)
-      return
-    except:
-      pass
-
-  if message.content_type == "sticker" and lock_stickers:
-    try:
-      bot.delete_message(chat_id, message.message_id)
-      return
-    except:
-      pass
-
-
-# معالجة تعديل الرسائل
-@bot.edited_message_handler(func=lambda m: m.chat.type != "private")
-def edited_message_protection(message):
-  chat_id = message.chat.id
-  if is_admin(chat_id, message.from_user.id):
-    return
-  row = get_hamad_settings(chat_id)
-  lock_edit = row[9]
-  if lock_edit:
-    try:
-      bot.delete_message(chat_id, message.message_id)
-    except:
-      pass
-
-
-if __name__ == "__main__":
-
-  def run_bot():
-    print("Hamad Complete Bot with Activation/Deactivation started...")
-    bot.infinity_polling(skip_pending=True)
-
-  threading.Thread(target=run_bot).start()
-
-  port = int(os.environ.get("PORT", 5000))
-  app.run(host="0.0.0.0", port=port)
+print("Bot is running successfully on Render...")
+app.run()
