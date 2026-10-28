@@ -1,3 +1,4 @@
+import asyncio
 from asyncio import new_event_loop, set_event_loop
 import os
 from os import name, path
@@ -19,14 +20,23 @@ from telethon.tl.functions.channels import (
     UpdateUsernameRequest,
 )
 
-# 📌 معلوماتك الشخصية والجلسة والتوكن الجديد
+# 📌 معلوماتك الشخصية والجلسة الجديدة النظيفة والتوكن
 BOT_TOKEN = "8816325428:AAG5zvr8tq7-QuDOtaWEw8lM4PQMb_AFoJk"
 ADMIN_ID = "@Hl6l6"
 YrUsername = "@Hl6l6"
-SESSION_STRING = "1BJWap1wBu5ga9zTpmb2mhZ1wl4b0hsZepwc_dZYMJ5wzfRGFWoRkq8cuEH265JJtc8ZqJSBqRVjMODEg6JUE65G_PLrGqGUC-atZAipwzeFZ63KCeSZEAQ9j6SDtIAIonvymzwuoeXNiObDTweFWXt7WqnLjPooru9-NI5-7CnmZ1cP6E_-AUlTmcykkCLCsfJHs6lnPKMltYgApu4mBNoPbO6dXxlK0Ixq3Z3u41GumSzi6TgBvA73BJ1mg0rGyh7LK_caPe1Ylx13f26DZ6j2DIJEXSz5vPaLdByYj-AsU3bteERwq_20CavGykotHnugJCyjY6uGQQoL1uVTZiRoif6VbBXQ="
 
-API_ID = 25324581
-API_HASH = "08feee5eeb6fc0f31d5f2d23bb2c31d0"
+# الجلسة الجديدة التي تم توليدها وتحديثها خصيصاً لحسابك
+SESSION_STRING = (
+    "1AZWarzcBuxYPXQ4nabZHYHELXxrgrQubc1k56JYPx9fENrnj5bHRk2_9STHkYnK"
+    "djLofuACyF3OHDSa3ff7WqJS049hEjGDqdp0c4amj_c7MHTiED_euNKDQ3uCDLPN"
+    "9tXBrZ-v_ES7-MSdnlhaRazAfJ9PqQNuhGZLBLM1sK2K7YAlaM3X37E3LoDWoN-R"
+    "0Kle23fYN92Enw4TiRMgi68k2aSB8lCwNNF2G6MNua1Ea2gPi9qPn9x3STalBIOQ"
+    "NK-a7ft2viXILx2QUkcXX8vRk3Zvm1oT5CeymIKRhnEnJHim6aczzBy0exfocac0"
+    "hGdlico0LjwKZZX7d9fg3zVPPL4IYQSE="
+)
+
+API_ID = 34558339
+API_HASH = "8bfa63fc0de3d7c5ae8f7d3e6dab8751"
 
 bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
@@ -57,28 +67,23 @@ def usernames():
   v1 = choice(vowels)
 
   random_patterns = [
-      # 1. أنماط الحروف المتكررة كلياً أو جزئياً
-      c1 * 4,  # aaaa
-      c1 * 5,  # aaaaa
-      f"{c1*3}{n1}{n2}",  # aaa12
-      f"{n1}{c1*4}",  # 1aaaa
-      # 2. أنماط التكرار المزدوج والمتناسق
-      f"{c1}{c2}{c1}{c2}",  # abab
-      f"{c1}{c1}{c2}{c2}",  # aabb
-      f"{c1}{c2}{c2}{c1}",  # abba
-      f"{c1}_{c2}{c1}{c2}",  # a_bab
-      # 3. أنماط الشرطة السفلية المميزة والتكرار
-      f"{c1}{c1}_{c1}{c1}",  # aa_aa
-      f"_{c1}{c1}{c1}_",  # _aaa_
-      f"{c1}_{c1}_{c1}",  # a_a_a
-      f"{c1}{c1}_{c1}",  # aa_a
-      f"{c1}_{c1}{c1}",  # a_aa
-      # 4. النماذج شبيهة الكلمات والمنعكسة (صحيح + علة)
-      f"{sub_c1}{v1}{sub_c1}{v1}",  # cava
-      f"{sub_c1}{sub_c1}{v1}{sub_c1}",  # ccac
-      f"{sub_c1}_{v1}{sub_c1}",  # c_vc
-      f"{sub_c1}{v1}_{v1}{sub_c1}",  # cv_vc
-      # 5. الأنماط الكلاسيكية السابقة
+      c1 * 4,
+      c1 * 5,
+      f"{c1*3}{n1}{n2}",
+      f"{n1}{c1*4}",
+      f"{c1}{c2}{c1}{c2}",
+      f"{c1}{c1}{c2}{c2}",
+      f"{c1}{c2}{c2}{c1}",
+      f"{c1}_{c2}{c1}{c2}",
+      f"{c1}{c1}_{c1}{c1}",
+      f"_{c1}{c1}{c1}_",
+      f"{c1}_{c1}_{c1}",
+      f"{c1}{c1}_{c1}",
+      f"{c1}_{c1}{c1}",
+      f"{sub_c1}{v1}{sub_c1}{v1}",
+      f"{sub_c1}{sub_c1}{v1}{sub_c1}",
+      f"{sub_c1}_{v1}{sub_c1}",
+      f"{sub_c1}{v1}_{v1}{sub_c1}",
       f"{c1}{c2}{c1}{c2}{c1}",
       f"{c1}{c2}{c1}{c2}{c3}",
       f"{c1}_{c1}_{c2}",
@@ -156,7 +161,6 @@ def run_telethon_hunter():
           try:
             check = await client(CheckUsernameRequest(username=username))
             if check:
-              # محاولة التثبيت (Claim)
               result = await client(
                   CreateChannelRequest(
                       title=f"{username}", about="", megagroup=False
@@ -179,15 +183,13 @@ def run_telethon_hunter():
                 )
                 claim = False
 
-              # إرسال تنبيه لك عبر البوت
               bot.send_message(
                   ADMIN_ID,
-                  f"🎉 **New UserName Caught!**\n‹ UserName →"
-                  f" `@{username}`\n‹ Claim → {claim} ›",
+                  f"🎉 New UserName Caught!\n‹ UserName →"
+                  f" @{username}\n‹ Claim → {claim} ›",
                   parse_mode="Markdown",
               )
 
-              # تنظيف القنوات الوهمية
               async for chat in client.iter_dialogs():
                 if chat.name == f"[ {username} ]" and not chat.entity.username:
                   await client(DeleteChannelRequest(channel=chat.entity))
@@ -219,7 +221,7 @@ def start_hunting(message):
   is_hunting = True
   bot.reply_to(
       message,
-      "🟢 **تم تفعيل صيد اليوزرات التلقائي بنجاح!**\nالبوت يبحث الآن في الخلفية.",
+      "🟢 تم تفعيل صيد اليوزرات التلقائي بنجاح!\nالبوت يبحث الآن في الخلفية.",
   )
 
 
@@ -227,7 +229,7 @@ def start_hunting(message):
 def stop_hunting(message):
   global is_hunting
   is_hunting = False
-  bot.reply_to(message, "🛑 **تم إيقاف صيد اليوزرات المؤقت.**")
+  bot.reply_to(message, "🛑 تم إيقاف صيد اليوزرات المؤقت.")
 
 
 @bot.message_handler(commands=["clean", "تنظيف_الملفات"])
@@ -238,13 +240,13 @@ def clear_files(message):
     open("flood.txt", "w").close()
     bot.reply_to(
         message,
-        "🧹 **تم تنظيف وتفريغ ملفات الفحص (Banned & Fragment) بنجاح!**\nعادت"
+        "🧹 تم تنظيف وتفريغ ملفات الفحص (Banned & Fragment) بنجاح!\nعادت"
         " الملفات فارغة وجاهزة.",
         parse_mode="Markdown",
     )
   except Exception as e:
     bot.reply_to(
-        message, f"❌ حدث خطأ أثناء التنظيف: `{e}`", parse_mode="Markdown"
+        message, f"❌ حدث خطأ أثناء التنظيف: {e}", parse_mode="Markdown"
     )
 
 
@@ -253,13 +255,13 @@ def send_welcome(message):
   bot.reply_to(
       message,
       "أهلاً بك يا مطورنا العزيز في بوت الصيد والحماية! 🛡️\nاستخدم الأمر"
-      " `/start_hunt` لبدء الصيد.\nولتنظيف الملفات استخدم `/clean`.",
+      " /start_hunt لبدء الصيد.\nولتنظيف الملفات استخدم /clean.",
   )
 
 
 def run_telegram_bot():
   try:
-    bot.remove_webhook()  # لمنع تداخل الاتصالات وخطأ 409
+    bot.remove_webhook()
     time.sleep(1)
     bot.infinity_polling(none_stop=True)
   except Exception as e:
@@ -267,14 +269,8 @@ def run_telegram_bot():
 
 
 if __name__ == "__main__":
-  # تشغيل صيد اليوزرات في الخلفية
   hunter_thread = threading.Thread(target=run_telethon_hunter, daemon=True)
   hunter_thread.start()
 
-  # تشغيل البوت الأساسي
   bot_thread = threading.Thread(target=run_telegram_bot, daemon=True)
   bot_thread.start()
-
-  # تشغيل سيرفر الويب على Render
-  port = int(os.environ.get("PORT", 10000))
-  app.run(host="0.0.0.0", port=port)
