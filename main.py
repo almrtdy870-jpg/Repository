@@ -1,6 +1,6 @@
 import os
 import asyncio
-from pyrogram import Client, filters
+from pyrogram import Client, filters, idle
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
 # قراءة متغيرات البيئة من Render
@@ -11,13 +11,6 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN")
 if not API_ID or not API_HASH or not BOT_TOKEN:
     print("خطأ: يرجى التأكد من تعيين متغيرات البيئة الثلاثة بشكل صحيح!")
     exit(1)
-
-# حل مشكلة Event Loop مع إصدارات بايثون الحديثة على Render
-try:
-    loop = asyncio.get_event_loop()
-except RuntimeError:
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
 
 # إعداد تطبيق البوت
 app = Client(
@@ -40,17 +33,23 @@ async def start_command(client: Client, message: Message):
     )
 
 # عرض الأوامر
-@app.on_message(filters.command("الاوامر") & filters.private)
+@app.on_message(filters.command("الالاوامر") & filters.private)
 async def commands_list(client: Client, message: Message):
     text = (
         "📜 **قائمة الأوامر المتاحة:**\n\n"
         "• `/start` - بدء تشغيل البوت.\n"
-        "• `/الاوامر` - عرض هذه القائمة.\n"
-        "• أضف البوت إلى مجموعتك ليعمل تلقائياً في حماية المجموعة ومنع التفليش."
+        "• `/الاوامر` - عرض هذه قائمة الأوامر.\n"
+        "• أضف البوت إلى مجموعتك ليعمل تلقائياً."
     )
     await message.reply_text(text)
 
-# تشغيل البوت
+# الدالة الرئيسية للتشغيل المستقر
+async def main():
+    print("جاري تشغيل البوت الان...")
+    await app.start()
+    print("تم تشغيل البوت بنجاح وأصبح متصلاً بتلغرام 24 ساعة! 🚀")
+    await idle()
+    await app.stop()
+
 if __name__ == "__main__":
-    print("جاري تشغيل البوت بنجاح...")
-    app.run()
+    asyncio.run(main())
