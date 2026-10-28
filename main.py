@@ -1,5 +1,5 @@
 import os
-import sqlite3
+import asyncio
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
@@ -12,6 +12,13 @@ if not API_ID or not API_HASH or not BOT_TOKEN:
     print("خطأ: يرجى التأكد من تعيين متغيرات البيئة الثلاثة بشكل صحيح!")
     exit(1)
 
+# حل مشكلة Event Loop مع إصدارات بايثون الحديثة على Render
+try:
+    loop = asyncio.get_event_loop()
+except RuntimeError:
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
 # إعداد تطبيق البوت
 app = Client(
     "XPicCleanerBot",
@@ -19,18 +26,6 @@ app = Client(
     api_hash=API_HASH,
     bot_token=BOT_TOKEN
 )
-
-# إعداد قاعدة البيانات لحفظ الإعدادات
-db = sqlite3.connect("bot_database.db", check_same_thread=False)
-cursor = db.cursor()
-cursor.execute("""
-    CREATE TABLE IF NOT EXISTS settings (
-        chat_id INTEGER PRIMARY KEY,
-        clean_media INTEGER DEFAULT 0,
-        anti_nuke INTEGER DEFAULT 1
-    )
-""")
-db.commit()
 
 # أمر البدء في الخاص
 @app.on_message(filters.command("start") & filters.private)
@@ -56,5 +51,6 @@ async def commands_list(client: Client, message: Message):
     await message.reply_text(text)
 
 # تشغيل البوت
-print("جاري تشغيل البوت...")
-app.run()
+if __name__ == "__main__":
+    print("جاري تشغيل البوت بنجاح...")
+    app.run()
