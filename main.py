@@ -20,8 +20,8 @@ from telethon.tl.functions.channels import (
     UpdateUsernameRequest,
 )
 
-# 📌 معلوماتك الشخصية والجلسة الجديدة النظيفة والتوكن
-BOT_TOKEN = "8816325428:AAG5zvr8tq7-QuDOtaWEw8lM4PQMb_AFoJk"
+# 📌 التوكن الجديد والمعلومات الشخصية والجلسة
+BOT_TOKEN = "9148106346:AAF6XnZ__06uK3SMUi0rZ19Ic5fbKyVw7r8"
 ADMIN_ID = "@Hl6l6"
 YrUsername = "@Hl6l6"
 
@@ -47,6 +47,11 @@ is_hunting = False
 @app.route("/")
 def home():
   return "Username Hunter Bot is running successfully! ⚡"
+
+
+def run_flask():
+  port = int(os.environ.get("PORT", 10000))
+  app.run(host="0.0.0.0", port=port)
 
 
 # دالة توليد الأنماط المتقدمة والمكررة الفخمة
@@ -269,6 +274,10 @@ def run_telegram_bot():
 
 
 if __name__ == "__main__":
+  # تشغيل سيرفر Flask في الخلفية لإبقاء الخدمة نشطة على Render
+  flask_thread = threading.Thread(target=run_flask, daemon=True)
+  flask_thread.start()
+
   hunter_thread = threading.Thread(target=run_telethon_hunter, daemon=True)
   hunter_thread.start()
 
