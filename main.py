@@ -21,7 +21,7 @@ from telethon.tl.functions.channels import (
 )
 
 # 📌 التوكن الجديد والمعلومات الشخصية والجلسة
-BOT_TOKEN = "9148106346:AAF6XnZ__06uK3SMUi0rZ19Ic5fbKyVw7r8"
+BOT_TOKEN = "8816325428:AAG5zvr8tq7-QuDOtaWEw8lM4PQMb_AFoJk"
 ADMIN_ID = "@Hl6l6"
 YrUsername = "@Hl6l6"
 
@@ -274,12 +274,20 @@ def run_telegram_bot():
 
 
 if __name__ == "__main__":
-  # تشغيل سيرفر Flask في الخلفية لإبقاء الخدمة نشطة على Render
+  # 1. تشغيل سيرفر Flask
   flask_thread = threading.Thread(target=run_flask, daemon=True)
   flask_thread.start()
 
+  # 2. تشغيل فاحص اليوزرات
   hunter_thread = threading.Thread(target=run_telethon_hunter, daemon=True)
   hunter_thread.start()
 
+  # 3. تشغيل بوت التيليجرام
   bot_thread = threading.Thread(target=run_telegram_bot, daemon=True)
   bot_thread.start()
+
+  print("All services are up and running...")
+
+  # حلقة إبقاء رئيسية لمنع إنهاء التطبيق مبكراً
+  while True:
+    time.sleep(1)
