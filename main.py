@@ -1,7 +1,6 @@
 import os
 import asyncio
-from pyrogram import Client, filters, idle
-from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+from pyrogram import Client, filters
 
 # قراءة متغيرات البيئة من Render
 API_ID = os.environ.get("API_ID")
@@ -22,34 +21,31 @@ app = Client(
 
 # أمر البدء في الخاص
 @app.on_message(filters.command("start") & filters.private)
-async def start_command(client: Client, message: Message):
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("• المطور •", url="https://t.me/")]
-    ])
+async def start_command(client, message):
     await message.reply_text(
         "أهلاً بك عزيزي في بوت الحماية وإدارة المجموعات (XPic Cleaner).\n\n"
-        "قم بإضافة البوت إلى مجموعتك واجعله مشرفاً ليقوم بحمايتها وتطهيرها بكفاءة عالية!",
-        reply_markup=keyboard
+        "قم بإضافة البوت إلى مجموعتك واجعله مشرفاً ليقوم بحمايتها بكفاءة عالية!"
     )
 
 # عرض الأوامر
-@app.on_message(filters.command("الالاوامر") & filters.private)
-async def commands_list(client: Client, message: Message):
+@app.on_message(filters.command("الاوامر") & filters.private)
+async def commands_list(client, message):
     text = (
         "📜 **قائمة الأوامر المتاحة:**\n\n"
         "• `/start` - بدء تشغيل البوت.\n"
-        "• `/الاوامر` - عرض هذه قائمة الأوامر.\n"
-        "• أضف البوت إلى مجموعتك ليعمل تلقائياً."
+        "• `/الاوامر` - عرض قائمة الأوامر."
     )
     await message.reply_text(text)
 
-# الدالة الرئيسية للتشغيل المستقر
+# الدالة الرئيسية للتشغيل المستقر 24 ساعة
 async def main():
-    print("جاري تشغيل البوت الان...")
+    print("جاري تشغيل البوت الآن...")
     await app.start()
     print("تم تشغيل البوت بنجاح وأصبح متصلاً بتلغرام 24 ساعة! 🚀")
-    await idle()
-    await app.stop()
+    
+    # حلقة انتظار مستقرة وآمنة تماماً لتجنب مشاكل الإصدارات الحديثة
+    while True:
+        await asyncio.sleep(3600)
 
 if __name__ == "__main__":
     asyncio.run(main())
