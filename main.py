@@ -1,5 +1,12 @@
-import os
 import asyncio
+import os
+
+# حل جذري ومضمون 100% لإجبار بايثون 3.14 على تشغيل حلقة الأحداث بدون أخطاء
+try:
+    asyncio.get_event_loop()
+except RuntimeError:
+    asyncio.set_event_loop(asyncio.new_event_loop())
+
 from pyrogram import Client, filters
 
 API_ID = os.environ.get("API_ID")
