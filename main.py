@@ -10,16 +10,19 @@ TOKEN = os.environ.get("BOT_TOKEN")
 bot = telebot.TeleBot(TOKEN, parse_mode="HTML")
 app = Flask(__name__)
 
-# إعداد قاعدة البيانات SQLite لحفظ إعدادات المجموعات بشكل دائم
-conn = sqlite3.connect("omda_bot.db", check_same_thread=False)
+# إعداد قاعدة البيانات الداخلية SQLite لحفظ إعدادات المجموعات
+conn = sqlite3.connect("bot_database.db", check_same_thread=False)
 cursor = conn.cursor()
 
-# إنشاء جدول الإعدادات للمجموعات
+# إنشاء جدول إعدادات الحماية والقفل لكل مجموعة
 cursor.execute("""
-    CREATE TABLE IF NOT EXISTS chat_settings (
+    CREATE TABLE IF NOT EXISTS group_settings (
         chat_id INTEGER PRIMARY KEY,
         lock_links INTEGER DEFAULT 1,
-        lock_usernames INTEGER DEFAULT 1
+        lock_usernames INTEGER DEFAULT 1,
+        lock_photos INTEGER DEFAULT 0,
+        lock_stickers INTEGER DEFAULT 0,
+        lock_bots INTEGER DEFAULT 1
     )
 """)
 conn.commit()
@@ -27,29 +30,29 @@ conn.commit()
 
 @app.route("/")
 def home():
-  app_name = os.environ.get("RENDER_SERVICE_NAME", "Omda/Merida Protection Bot")
-  return f"{app_name} is active and running 24/7!"
+  return "Merida/Omda Protection Bot is active and running 24/7!"
 
 
 # دالة جلب إعدادات المجموعة أو إنشائها تلقائياً
 def get_settings(chat_id):
   cursor.execute(
-      "SELECT lock_links, lock_usernames FROM chat_settings WHERE chat_id = ?",
+      "SELECT lock_links, lock_usernames, lock_photos, lock_stickers,"
+      " lock_bots FROM group_settings WHERE chat_id = ?",
       (chat_id,),
   )
   row = cursor.fetchone()
   if not row:
     cursor.execute(
-        "INSERT INTO chat_settings (chat_id, lock_links, lock_usernames) VALUES"
-        " (?, 1, 1)",
+        "INSERT INTO group_settings (chat_id, lock_links, lock_usernames,"
+        " lock_photos, lock_stickers, lock_bots) VALUES (?, 1, 1, 0, 0, 1)",
         (chat_id,),
     )
     conn.commit()
-    return 1, 1
+    return 1, 1, 0, 0, 1
   return row
 
 
-# دالة للتحقق من أن المستخدم مشرف في المجموعة
+# دالة التحقق من المشرفين
 def is_admin(chat_id, user_id):
   try:
     member = bot.get_chat_member(chat_id, user_id)
@@ -65,26 +68,29 @@ def welcome_new_member(message):
     name = member.first_name
     bot.reply_to(
         message,
-        f"أهلاً بك يا <b>{name}</b> في المجموعه، نورتنا! 🌹\nيرجى الالتزام"
-        " بالقوانين لعدم التعرض للحظر.",
+        f"أهلاً بك يا <b>{name}</b> في المجموعة، نورتنا! 🌹\nيرجى الالتزام"
+        " بالقوانين لعدم التعرض للتقييد.",
     )
 
 
-# أمر البدء
+# أمر البدء أو الـ /start
 @bot.message_handler(commands=["start"])
 def start_command(message):
   if message.chat.type == "private":
     bot.reply_to(
         message,
-        "أهلاً بك عزيزي في بوت حماية المجموعات المتكامل (نظام العمدة وميريدا)."
-        " 🛡️\nأضفني إلى مجموعتك واجعلني مشرفاً بصلاحيات كاملة!",
+        "أهلاً بك في بوت الحماية المتكامل (نظام ميريدا والعمدة). 🛡️\nأضفني إلى"
+        " مجموعتك وارفعني مشرفاً لأقوم بحمايتها بأعلى كفاءة!",
     )
   else:
-    bot.reply_to(message, "بوت الحماية الشامل يعمل بكامل طاقته لحماية الجروب! ⚡")
+    bot.reply_to(message, "بوت الحماية يعمل بكامل طاقته لحماية الجروب! ⚡")
 
 
-# أمر الآيدي ومعلومات العضو والمجموعة
-@bot.message_handler(commands=["id", "الايدي", "ايدي"])
+# أمر الآيدي ومعلومات العضو والمجموعة (يدعم /id أو كلمة ايدي)
+@bot.message_handler(
+    func=lambda m: m.text
+    and m.text.lower() in ["id", "الايدي", "ايدي", "/id", "/الايدي"]
+)
 def get_id(message):
   user = message.from_user
   chat = message.chat
@@ -100,56 +106,90 @@ def get_id(message):
   bot.reply_to(message, text)
 
 
-# أوامر قفل وفتح الروابط والمعرفات
+# 🔒 أوامر القفل والفتح بالنص العادي (مثل بوتات العمدة وميريدا)
 @bot.message_handler(
-    commands=[
-        "قفل_الروابط",
-        "فتح_الروابط",
-        "قفل_المعرفات",
-        "فتح_المعرفات",
+    func=lambda m: m.text
+    and m.chat.type != "private"
+    and m.text.lower()
+    in [
         "قفل الروابط",
         "فتح الروابط",
+        "قفل المعرفات",
+        "فتح المعرفات",
+        "قفل الصور",
+        "فتح الصور",
+        "قفل الملصقات",
+        "فتح الملصقات",
+        "قفل البوتات",
+        "فتح البوتات",
     ]
 )
-def group_control(message):
-  if message.chat.type == "private":
-    return
+def control_locks_text(message):
   if not is_admin(message.chat.id, message.from_user.id):
     bot.reply_to(message, "عذراً، هذا الأمر للمشرفين فقط! ❌")
     return
 
-  text = message.text
+  text = message.text.lower()
   chat_id = message.chat.id
 
-  if "قفل" in text and "روابط" in text:
+  if text == "قفل الروابط":
     cursor.execute(
-        "UPDATE chat_settings SET lock_links = 1 WHERE chat_id = ?", (chat_id,)
+        "UPDATE group_settings SET lock_links = 1 WHERE chat_id = ?", (chat_id,)
     )
     conn.commit()
     bot.reply_to(message, "تم قفل الروابط بنجاح 🔒")
-  elif "فتح" in text and "روابط" in text:
+  elif text == "فتح الروابط":
     cursor.execute(
-        "UPDATE chat_settings SET lock_links = 0 WHERE chat_id = ?", (chat_id,)
+        "UPDATE group_settings SET lock_links = 0 WHERE chat_id = ?", (chat_id,)
     )
     conn.commit()
     bot.reply_to(message, "تم فتح الروابط بنجاح 🔓")
-  elif "قفل" in text and "معرفات" in text:
+
+  elif text == "قفل المعرفات":
     cursor.execute(
-        "UPDATE chat_settings SET lock_usernames = 1 WHERE chat_id = ?",
+        "UPDATE group_settings SET lock_usernames = 1 WHERE chat_id = ?",
         (chat_id,),
     )
     conn.commit()
-    bot.reply_to(message, "تم قفل المعرفات (الكليشات) بنجاح 🔒")
-  elif "فتح" in text and "معرفات" in text:
+    bot.reply_to(message, "تم قفل المعرفات بنجاح 🔒")
+  elif text == "فتح المعرفات":
     cursor.execute(
-        "UPDATE chat_settings SET lock_usernames = 0 WHERE chat_id = ?",
+        "UPDATE group_settings SET lock_usernames = 0 WHERE chat_id = ?",
         (chat_id,),
     )
     conn.commit()
     bot.reply_to(message, "تم فتح المعرفات بنجاح 🔓")
 
+  elif text == "قفل الصور":
+    cursor.execute(
+        "UPDATE group_settings SET lock_photos = 1 WHERE chat_id = ?", (chat_id,)
+    )
+    conn.commit()
+    bot.reply_to(message, "تم قفل الصور بنجاح 🔒")
+  elif text == "فتح الصور":
+    cursor.execute(
+        "UPDATE group_settings SET lock_photos = 0 WHERE chat_id = ?", (chat_id,)
+    )
+    conn.commit()
+    bot.reply_to(message, "تم فتح الصور بنجاح 🔓")
 
-# 🚫 أوامر الإدارة (حظر وطرد)
+  elif text == "قفل الملصقات":
+    cursor.execute(
+        "UPDATE group_settings SET lock_stickers = 1 WHERE chat_id = ?",
+        (chat_id,),
+    )
+    conn.commit()
+    bot.reply_to(message, "تم قفل الملصقات بنجاح 🔒")
+  elif text == "فتح الملصقات":
+    cursor.execute(
+        "UPDATE group_settings SET lock_stickers = 0 WHERE chat_id = ?",
+        (chat_id,),
+    )
+    conn.commit()
+    bot.reply_to(message, "تم فتح الملصقات بنجاح 🔓")
+
+
+# 🚫 أوامر الإدارة الفورية (بالرد على الرسالة: حظر، كتم)
 @bot.message_handler(commands=["ban", "حظر", "طرد"])
 def ban_user(message):
   if message.chat.type == "private":
@@ -165,12 +205,11 @@ def ban_user(message):
       bot.ban_chat_member(message.chat.id, target_id)
       bot.reply_to(message, f"تم حظر العضو <b>{target_name}</b> بنجاح! 🔨")
     except Exception as e:
-      bot.reply_to(message, f"فشل الحظر، تأكد من صلاحيات البوت. الخطأ: {e}")
+      bot.reply_to(message, f"فشل الحظر. تأكد من صلاحيات البوت. الخطأ: {e}")
   else:
     bot.reply_to(message, "يرجى الرد على رسالة الشخص المراد حظره.")
 
 
-# 🔇 أوامر الكتم
 @bot.message_handler(commands=["mute", "كتم"])
 def mute_user(message):
   if message.chat.type == "private":
@@ -191,9 +230,11 @@ def mute_user(message):
     bot.reply_to(message, "يرجى الرد على رسالة الشخص المراد كتمه.")
 
 
-# 🛡️ نظام الحماية التلقائي (حذف الروابط والمعرفات بناءً على إعدادات المجموعة)
-@bot.message_handler(func=lambda message: True, content_types=["text"])
-def protection_system(message):
+# 🛡️ نظام الحماية التلقائي الشامل (النصوص، الصور، الملصقات)
+@bot.message_handler(
+    content_types=["text", "photo", "sticker", "document", "video"]
+)
+def comprehensive_protection(message):
   if message.chat.type == "private":
     return
 
@@ -201,48 +242,67 @@ def protection_system(message):
   if is_admin(message.chat.id, message.from_user.id):
     return
 
-  lock_links, lock_usernames = get_settings(message.chat.id)
-  text = message.text.lower()
-
-  is_link = (
-      "http://" in text
-      or "https://" in text
-      or "t.me/" in text
-      or "www." in text
+  chat_id = message.chat.id
+  lock_links, lock_usernames, lock_photos, lock_stickers, lock_bots = (
+      get_settings(chat_id)
   )
-  is_username = "@" in text
 
-  if (lock_links and is_link) or (lock_usernames and is_username):
+  # فحص الرسائل النصية (الروابط والمعرفات)
+  if message.content_type == "text" and message.text:
+    text = message.text.lower()
+    is_link = (
+        "http://" in text
+        or "https://" in text
+        or "t.me/" in text
+        or "www." in text
+    )
+    is_username = "@" in text
+
+    if (lock_links and is_link) or (lock_usernames and is_username):
+      try:
+        bot.delete_message(chat_id, message.message_id)
+        user_name = message.from_user.first_name
+        warn = bot.send_message(
+            chat_id,
+            f"عذراً <b>{user_name}</b>، ممنوع نشر الروابط والمعرفات هنا! 🚫",
+        )
+
+        def delete_warn():
+          time.sleep(4)
+          try:
+            bot.delete_message(chat_id, warn.message_id)
+          except:
+            pass
+
+        threading.Thread(target=delete_warn).start()
+        return
+      except:
+        pass
+
+  # فحص الصور
+  if message.content_type == "photo" and lock_photos:
     try:
-      bot.delete_message(message.chat.id, message.message_id)
-      user_name = message.from_user.first_name
-      warning = bot.send_message(
-          message.chat.id,
-          f"عذراً <b>{user_name}</b>، ممنوع نشر الروابط والمعرفات في هذه"
-          " المجموعة! 🚫",
-      )
+      bot.delete_message(chat_id, message.message_id)
+      return
+    except:
+      pass
 
-      # حذف التحذير تلقائياً بعد 4 ثواني
-      def delete_warning():
-        time.sleep(4)
-        try:
-          bot.delete_message(message.chat.id, warning.message_id)
-        except:
-          pass
-
-      threading.Thread(target=delete_warning).start()
+  # فحص الملصقات
+  if message.content_type == "sticker" and lock_stickers:
+    try:
+      bot.delete_message(chat_id, message.message_id)
+      return
     except:
       pass
 
 
 if __name__ == "__main__":
-  # تشغيل البوت بخلفية مستقلة
+
   def run_bot():
-    print("Omda Ultimate Bot polling started...")
+    print("Bot polling started successfully...")
     bot.infinity_polling(skip_pending=True)
 
   threading.Thread(target=run_bot).start()
 
-  # تشغيل سيرفر الويب لاستضافة رندر
   port = int(os.environ.get("PORT", 5000))
   app.run(host="0.0.0.0", port=port)
